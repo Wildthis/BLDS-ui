@@ -63,26 +63,33 @@ const stopStream = () => {
 // 检测文本偏见
 const checkBias = async (text) => {
   try {
+    console.log('Sending text for bias check:', text)
     // 调用 BLDS 项目的预测接口
-    const response = await fetch('http://localhost:8080/predict', {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/predict`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: `"${text}"` // 直接发送带引号的字符串
+      body: JSON.stringify(text)
     })
 
     if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      console.error('Error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: errorData
+      })
       throw new Error(`HTTP error! status: ${response.status}`)
     }
 
     const result = await response.json()
-    console.log('Bias detection result:', result) // 添加日志以便调试
+    console.log('Bias detection result:', result)
     
     // 根据接口返回格式处理结果
     return {
-      isBiased: result.is_biased || false,
-      biasType: result.bias_type || null
+      isBiased: result.data !== 'false', // 如果返回的不是 'false'，则认为存在偏见
+      biasType: result.data === 'false' ? null : result.data // 如果是 'false'，则没有偏见类型
     }
   } catch (error) {
     console.error('Error checking bias:', error)
