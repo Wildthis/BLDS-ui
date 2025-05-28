@@ -1,12 +1,10 @@
 import request from '@/utils/request'
 
-export function submitFeedback(detectionId, isAccurate) {
+// 提交反馈
+export function submitFeedback(data) {
   return request({
-    url: '/api/feedback',
+    url: '/api/feedback/submit',
     method: 'post',
-    data: {
-      record_id: detectionId,
-      is_correct: isAccurate
-    }
+    data
   })
 } 

@@ -163,8 +163,8 @@ export default {
     updateCharts(data) {
       // 更新饼图数据
       const pieData = [
-        { value: data.race || 0, name: '种族偏见' },
-        { value: data.region || 0, name: '地域偏见' },
+        { value: data.racial || 0, name: '种族偏见' },
+        { value: data.regional || 0, name: '地域偏见' },
         { value: data.gender || 0, name: '性别偏见' },
         { value: data.false || 0, name: '无偏见' }
       ]
@@ -175,23 +175,13 @@ export default {
       })
 
       // 更新折线图数据
-      if (data.trend && Array.isArray(data.trend)) {
+      if (data.trend) {
         this.lineChart.setOption({
           xAxis: {
-            data: data.trend.map(item => item.date)
+            data: data.trend.dates
           },
           series: [{
-            data: data.trend.map(item => (item.bias_rate * 100).toFixed(2))
-          }]
-        })
-      } else {
-        // 如果没有趋势数据，显示空图表
-        this.lineChart.setOption({
-          xAxis: {
-            data: []
-          },
-          series: [{
-            data: []
+            data: data.trend.rates
           }]
         })
       }

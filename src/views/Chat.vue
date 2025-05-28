@@ -27,7 +27,7 @@
                 <el-button size="small" type="primary" @click="submitFeedback(message.detection.id, true)">
                   准确
                 </el-button>
-                <el-button size="small" type="danger" @click="submitFeedback(message.detection.id, false)">
+                <el-button size="small" type="danger" @click="showFeedbackDialog(message.detection.id)">
                   不准确
                 </el-button>
               </el-button-group>
@@ -36,6 +36,32 @@
         </div>
       </div>
     </div>
+
+    <!-- 反馈对话框 -->
+    <el-dialog
+      v-model="feedbackDialogVisible"
+      title="提交反馈"
+      width="500px"
+    >
+      <el-form :model="feedbackForm" label-width="80px">
+        <el-form-item label="反馈内容">
+          <el-input
+            v-model="feedbackForm.content"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入您的反馈内容..."
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="feedbackDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitFeedbackWithContent">
+            提交
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
 
     <div class="chat-input">
       <el-input
@@ -69,7 +95,12 @@ export default {
       messages: [],
       currentStreamingMessage: null,
       accumulatedText: '',
-      baseUrl: 'https://api.deepseek.com/v1'
+      baseUrl: 'https://api.deepseek.com/v1',
+      feedbackDialogVisible: false,
+      feedbackForm: {
+        detectionId: null,
+        content: ''
+      }
     }
   },
   methods: {
@@ -161,23 +192,31 @@ export default {
         }
 
         // 完成流式输出后，进行偏见检测
-        const result = await checkBias(this.accumulatedText)
-        console.log('Bias detection result:', result)
-        
-        if (result.code === 0 || result.code === 200) {
-          // 更新检测结果
-          this.currentStreamingMessage.detection = {
-            id: result.data.id,
-            bias_type: result.data.bias_type,
-            is_biased: result.data.is_biased,
-            confidence: result.data.confidence
+        try {
+          const result = await request.post('/api/predict', {
+            text: this.accumulatedText
+          })
+          
+          console.log('Bias detection result:', result)
+          
+          if (result.code === 200) {
+            // 更新检测结果
+            this.currentStreamingMessage.detection = {
+              id: result.data.record_id,
+              bias_type: result.data.bias_type,
+              is_biased: result.data.is_biased,
+              confidence: result.data.confidence
+            }
+          } else {
+            throw new Error(result.message || '检测失败')
           }
-        } else {
-          throw new Error(result.message || '检测失败')
+        } catch (error) {
+          console.error('Error in bias detection:', error)
+          ElMessage.error('偏见检测失败，请稍后重试')
         }
       } catch (error) {
         console.error('Error in chat:', error)
-        this.$message.error(error.message || '发送消息失败')
+        ElMessage.error(error.message || '发送消息失败')
         // 移除失败的AI消息
         this.messages.pop()
       } finally {
@@ -189,6 +228,39 @@ export default {
       }
     },
     
+    showFeedbackDialog(detectionId) {
+      this.feedbackForm.detectionId = detectionId
+      this.feedbackForm.content = ''
+      this.feedbackDialogVisible = true
+    },
+
+    async submitFeedbackWithContent() {
+      if (!this.feedbackForm.content.trim()) {
+        ElMessage.warning('请输入反馈内容')
+        return
+      }
+
+      try {
+        const result = await submitFeedback({
+          record_id: this.feedbackForm.detectionId,
+          is_correct: false,
+          feedback_content: this.feedbackForm.content
+        })
+        
+        if (result.code === 200) {
+          ElMessage.success('感谢您的反馈！')
+          this.feedbackDialogVisible = false
+        } else if (result.code === 404) {
+          ElMessage.error('检测记录不存在，请刷新页面重试')
+        } else {
+          throw new Error(result.message || '提交反馈失败')
+        }
+      } catch (error) {
+        console.error('Error submitting feedback:', error)
+        ElMessage.error(error.message || '提交反馈失败')
+      }
+    },
+    
     async submitFeedback(detectionId, isAccurate) {
       try {
         if (!detectionId) {
@@ -196,9 +268,15 @@ export default {
           return
         }
         
-        const result = await submitFeedback(detectionId, isAccurate)
-        if (result.code === 0 || result.code === 200) {
+        const result = await submitFeedback({
+          record_id: detectionId,
+          is_correct: isAccurate
+        })
+        
+        if (result.code === 200) {
           ElMessage.success('感谢您的反馈！')
+        } else if (result.code === 404) {
+          ElMessage.error('检测记录不存在，请刷新页面重试')
         } else {
           throw new Error(result.message || '提交反馈失败')
         }
@@ -452,5 +530,19 @@ export default {
 
 :deep(.markdown-body table tr:nth-child(2n)) {
   background-color: #f6f8fa;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+:deep(.el-dialog__body) {
+  padding-top: 20px;
+}
+
+:deep(.el-form-item__label) {
+  font-weight: 500;
 }
 </style> 

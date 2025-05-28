@@ -84,6 +84,7 @@
 import { saveAs } from 'file-saver'
 import * as XLSX from 'xlsx'
 import request from '@/utils/request'
+import { ElMessage } from 'element-plus'
 
 export default {
   name: 'Feedback',
@@ -123,12 +124,12 @@ export default {
         })
 
         if (result.code === 0 || result.code === 200) {
-          this.feedbackData = result.data.data
+          this.feedbackData = result.data.records
           this.totalPages = Math.ceil(result.data.total / this.pageSize)
         }
       } catch (error) {
         console.error('Error loading feedback data:', error)
-        alert('加载反馈数据失败')
+        ElMessage.error('加载反馈数据失败')
       } finally {
         this.isLoading = false
       }
@@ -159,12 +160,11 @@ export default {
     async exportToExcel() {
       try {
         // 获取所有数据
-        const response = await fetch('http://localhost:8080/api/feedback/export')
-        if (!response.ok) {
-          throw new Error('导出数据失败')
-        }
+        const result = await request({
+          url: '/api/feedback/export',
+          method: 'get'
+        })
 
-        const result = await response.json()
         if (result.code === 0 || result.code === 200) {
           const data = result.data
 
@@ -188,10 +188,14 @@ export default {
           const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
           const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
           saveAs(blob, `用户反馈数据_${this.formatDate(new Date())}.xlsx`)
+          
+          ElMessage.success('导出成功')
+        } else {
+          throw new Error(result.message || '导出数据失败')
         }
       } catch (error) {
         console.error('Error exporting data:', error)
-        alert('导出数据失败')
+        ElMessage.error(error.message || '导出数据失败')
       }
     }
   }
